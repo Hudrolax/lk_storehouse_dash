@@ -22,7 +22,7 @@ class DataWorker:
     @property
     def df(self):
         with self.lock:
-            return self._df
+            return self._df.copy()
 
     @staticmethod
     def _date_to_str_1c(_date: datetime) -> str:
@@ -139,11 +139,13 @@ class DataWorker:
 
     def threaded_func(self):
         while True:
-            with self.lock:
-                try:
-                    self._df = self._load_data(self._df)
-                except Exception as ex:
-                    self.logger.error(ex)
+            df_copy = self._df.copy()
+            try:
+                df_copy = self._load_data(df_copy)
+                with self.lock:
+                    self._df = df_copy.copy()
+            except Exception as ex:
+                self.logger.error(ex)
             sleep(5)
 
     def run(self):
