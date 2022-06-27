@@ -4,6 +4,7 @@ import dash_mantine_components as dmc
 from dash.dependencies import Input, Output, State
 import dash_bootstrap_components as dbc
 import plotly.express as px
+import plotly.graph_objs as go
 import pandas as pd
 from update_date import DataWorker
 import logging
@@ -26,7 +27,7 @@ enable_dash_auth(app)
 db = DataWorker()
 
 
-def draw_main_graph(start_date, end_date):
+def dates_calc(start_date, end_date):
     if db.df.empty:
         return px.scatter()
     if start_date is not None:
@@ -37,6 +38,11 @@ def draw_main_graph(start_date, end_date):
         end_date = pd.to_datetime(end_date).replace(hour=23, minute=59, second=59, microsecond=0)
     else:
         end_date = db.df['Дата'].max().replace(hour=23, minute=59, second=59, microsecond=0)
+    return start_date, end_date
+
+
+def draw_main_graph(start_date, end_date):
+    start_date, end_date = dates_calc(start_date, end_date)
     fig = px.scatter(db.df[(db.df['Дата'] >= start_date) & (db.df['Дата'] <= end_date)], x="Дата",
                      y="ВремяВыполнения_m",
                      color="Легенда", hover_name="Ссылка", opacity=0.7, symbol='Статус',
@@ -57,7 +63,7 @@ def draw_main_graph(start_date, end_date):
                                      'Реакция дольше 2х минут'],
                          'Статус': ['Выполнено', 'В работе', 'Подготовлено', 'Выполнено с ошибками'],
                          'СпособДоставки': ['Самовывоз', 'До клиента']
-                     })
+                     }, title='Задания')
     fig.update_traces(marker={'size': 10,
                               'line': {'color': 'DarkSlateGrey', 'width': 1}
                               },
@@ -67,13 +73,27 @@ def draw_main_graph(start_date, end_date):
     return fig
 
 
+def draw_load_graph(start_date, end_date):
+    start_date, end_date = dates_calc(start_date, end_date)
+    df_p = db.df[(db.df['Дата'] >= start_date) & (db.df['Дата'] <= end_date)]
+    trace1 = go.Scatter(x=df_p['Дата'], y=df_p['Нагрузка'], mode='lines+markers', yaxis='y1',
+                        name='Строк в работе')
+    trace2 = go.Scatter(x=df_p['Дата'], y=df_p['Объем в работе'], mode='lines', yaxis='y2',
+                        name='Объем, м<sup>3</sup> в работе')
+    data = [trace1, trace2]
+
+    layout = go.Layout(title='Нагрузка на склад',
+                       xaxis=dict(tickformat="%H:%M\n%d.%m.%Y"),
+                       yaxis=dict(title='Нагрузка (строк в работе)'),
+                       yaxis2=dict(title='Объем, м<sup>3</sup>',
+                                   overlaying='y',
+                                   side='right'))
+    fig = go.Figure(data=data, layout=layout)
+    return fig
+
+
 # ********************** the page **********************
 app.layout = dbc.Container([
-    # dbc.Row(
-    #     dbc.Col(
-    #         html.Img(src=b64_image('./src/leskraft.jpg'), height="30px")
-    #     ), justify='end',
-    # ),
     dbc.Row(
         dbc.Col(
             html.H3('Состояние заданий кладовщику',
@@ -97,18 +117,18 @@ app.layout = dbc.Container([
     dbc.Row(
         dbc.Col([
             dcc.Graph(id='main-graph'),
-            dcc.Interval(
-                id='interval-component',
-                interval=5 * 1000,  # in milliseconds
-                n_intervals=0
-            )
         ])
     ),
     dbc.Row([
         dbc.Col(
-            dcc.Graph(id='graph1')
+            dcc.Graph(id='graph_load')
         )
-    ])
+    ]),
+    dcc.Interval(
+        id='interval-component',
+        interval=5 * 1000,  # in milliseconds
+        n_intervals=0
+    )
 ])
 
 
@@ -116,14 +136,17 @@ app.layout = dbc.Container([
                Output('main-graph', 'animate'),
                Output('date-range-picker', 'minDate'),
                Output('date-range-picker', 'maxDate'),
-               Output('date-range-picker', 'value')],
+               Output('date-range-picker', 'value'),
+               Output('graph_load', 'figure'),
+               Output('graph_load', 'animate'),
+               ],
               [Input('interval-component', 'n_intervals'),
                Input('date-range-picker', 'value'),
                Input('btn_today', 'n_clicks')],
               prevent_initial_call=False)
 def update_graph_live(n, value, n_clicks):
     if db.df.empty:
-        return dash.no_update, dash.no_update, "", "", dash.no_update
+        return dash.no_update, dash.no_update, "", "", dash.no_update, dash.no_update, dash.no_update
     else:
         if value is None:
             value = (None, None)
@@ -131,8 +154,10 @@ def update_graph_live(n, value, n_clicks):
         if ctx.triggered_id in ['date-range-picker', 'btn_today']:
             animate = False
         if ctx.triggered_id == 'btn_today':
-            return draw_main_graph(None, None), animate, "", "", (None, None)
-        return draw_main_graph(*value), animate, db.df['Дата'].min(), db.df['Дата'].max(), dash.no_update
+            return draw_main_graph(None, None), animate, "", "", (None, None), draw_load_graph(None, None), \
+                   animate
+        return draw_main_graph(*value), animate, db.df['Дата'].min(), db.df['Дата'].max(), dash.no_update, \
+               draw_load_graph(*value), animate
 
 
 if __name__ == '__main__':

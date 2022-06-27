@@ -109,6 +109,7 @@ class DataWorker:
         _df['ВремяРеакции_m'] = _df['ВремяРеакции'].apply(lambda x: reaction_time_modify(x))
         _df['ВремяВыполнения_m'] = _df['ВремяВыполнения'].apply(lambda x: work_time_modify(x))
         _df['month'] = _df['Дата'].dt.month
+
         return _df
 
     def _load_data(self, _df: pd.DataFrame) -> pd.DataFrame:
@@ -123,6 +124,17 @@ class DataWorker:
             )
             if not loaded_df.empty:
                 _df = pd.concat([_df[_df['Дата'] < last_date], loaded_df], axis=0, ignore_index=True)
+
+        def load_calc(df):
+            for i in range(0, len(df)):
+                active_docs = df[(df['ДатаОкончанияВыполнения'] >= df.at[i, 'Дата']) & (df['Дата'] <= df.at[i, 'Дата'])]
+                df.at[i, 'Нагрузка'] = (active_docs['Строк']).sum()
+                df.at[i, 'Объем в работе'] = (active_docs['Объем']).sum()
+            return df
+
+        _df['Нагрузка'] = 0
+        _df['Объем в работе'] = 0
+        _df = load_calc(_df)
         return _df
 
     def threaded_func(self):
