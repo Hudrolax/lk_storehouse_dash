@@ -10,6 +10,7 @@ from update_date import DataWorker
 import logging
 import base64
 from auth import enable_dash_auth
+from threading import Lock
 
 logger = logging.getLogger('main')
 
@@ -24,7 +25,8 @@ app = Dash(__name__, title='Склад ЛК', external_stylesheets=[dbc.themes.M
            meta_tags=[{"name": "viewport",
                        'content': 'width=device-width, initial-scale=1.0'}])
 enable_dash_auth(app)
-db = DataWorker()
+lock = Lock()
+db = DataWorker(lock)
 
 
 def dates_calc(start_date, end_date):
@@ -92,11 +94,28 @@ def draw_load_graph(start_date, end_date):
     return fig
 
 
+def draw_react_graph(start_date, end_date):
+    start_date, end_date = dates_calc(start_date, end_date)
+    df_p = db.df[(db.df['Дата'] >= start_date) & (db.df['Дата'] <= end_date)]
+    df_p = df_p[['БригадаОтветственный', 'ВремяРеакции']][df_p['БригадаОтветственный'] != '']\
+        .groupby(by='БригадаОтветственный', as_index=False).mean()
+    df_p['ВремяРеакции'] = (df_p['ВремяРеакции'] / 60).astype(int)
+
+    fig = px.bar(df_p, x='ВремяРеакции', y='БригадаОтветственный', color='БригадаОтветственный',
+                 title='Время реакции',
+                 labels={
+                     "ВремяРеакции": "Среднее время реакции, мин.",
+                     "БригадаОтветственный": ""
+                 }, )
+    fig.update_layout(showlegend=False)
+    return fig
+
+
 # ********************** the page **********************
 app.layout = dbc.Container([
     dbc.Row(
         dbc.Col(
-            html.H3('Состояние заданий кладовщику',
+            html.H3('Мониторинг склада',
                     className='text-center')
         )
     ), dbc.Row([
@@ -108,7 +127,7 @@ app.layout = dbc.Container([
                 style={"width": 330},
                 locale="ru",
             )
-        ], width={'size': 4}),
+        ], width={'size': 3, 'offset': 1}),
         dbc.Col(
             html.Button('Текущий день', id='btn_today', n_clicks=0, className='btn btn-outline-primary'),
             width={'size': 2, 'offset': 0}, align="end"
@@ -121,15 +140,22 @@ app.layout = dbc.Container([
     ),
     dbc.Row([
         dbc.Col(
-            dcc.Graph(id='graph_load')
+            dcc.Graph(id='graph_load'), width={'size': 6}
+        ),
+        dbc.Col(
+            dcc.Graph(id='graph_react_time'), width={'size': 6}
         )
     ]),
-    dcc.Interval(
-        id='interval-component',
-        interval=30 * 1000,  # in milliseconds
-        n_intervals=0
+    dbc.Row(
+        dbc.Col(
+            dcc.Interval(
+                id='interval-component',
+                interval=10 * 1000,  # in milliseconds
+                n_intervals=0
+            )
+        )
     )
-])
+], fluid=True)
 
 
 @app.callback([Output('main-graph', 'figure'),
@@ -139,6 +165,7 @@ app.layout = dbc.Container([
                Output('date-range-picker', 'value'),
                Output('graph_load', 'figure'),
                Output('graph_load', 'animate'),
+               Output('graph_react_time', 'figure'),
                ],
               [Input('interval-component', 'n_intervals'),
                Input('date-range-picker', 'value'),
@@ -146,18 +173,19 @@ app.layout = dbc.Container([
               prevent_initial_call=False)
 def update_graph_live(n, value, n_clicks):
     if db.df.empty:
-        return dash.no_update, dash.no_update, "", "", dash.no_update, dash.no_update, dash.no_update
+        return dash.no_update, dash.no_update, "", "", dash.no_update, dash.no_update, dash.no_update, dash.no_update
     else:
         if value is None:
             value = (None, None)
         animate = True
         if ctx.triggered_id in ['date-range-picker', 'btn_today']:
             animate = False
-        if ctx.triggered_id == 'btn_today':
-            return draw_main_graph(None, None), animate, "", "", (None, None), draw_load_graph(None, None), \
-                   animate
-        return draw_main_graph(*value), animate, db.df['Дата'].min(), db.df['Дата'].max(), dash.no_update, \
-               draw_load_graph(*value), animate
+        with lock:
+            if ctx.triggered_id == 'btn_today':
+                return draw_main_graph(None, None), animate, "", "", (None, None), draw_load_graph(None, None), \
+                       animate, draw_react_graph(None, None)
+            return draw_main_graph(*value), animate, db.df['Дата'].min(), db.df['Дата'].max(), dash.no_update, \
+                   draw_load_graph(*value), animate, draw_react_graph(*value)
 
 
 if __name__ == '__main__':

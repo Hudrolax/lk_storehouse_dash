@@ -6,23 +6,22 @@ import json
 from time import sleep
 import logging
 import pandas as pd
-from threading import Lock
 
 
 class DataWorker:
     logger = logging.getLogger('DataWorker')
+    logger.level = logging.INFO
 
-    def __init__(self):
+    def __init__(self, lock):
         self._df = pd.DataFrame()
-        self.lock = Lock()
-        self.update_data_thread = threading.Thread(target=self.threaded_func, args=())
+        self.lock = lock
+        self.update_data_thread = threading.Thread(target=self.threaded_func, args=(), daemon=True)
         self.session = requests.Session()
         self.session.auth = (USER, PASSWORD)
 
     @property
     def df(self):
-        with self.lock:
-            return self._df.copy()
+        return self._df
 
     @staticmethod
     def _date_to_str_1c(_date: datetime) -> str:
@@ -33,11 +32,18 @@ class DataWorker:
             text = self.session.get(f'''
                 http://{SERVER}/{BASE}{ROUTE}?api_key={API_KEY}&date= {self._date_to_str_1c(_date)}
                 ''').text
-            # logger.info('get ok')
-        except requests.exceptions.ConnectionError or requests.exceptions.ConnectTimeout as ex:
-            self.logger.warning(ex)
+        except requests.exceptions .ConnectTimeout as ex:
+            self.logger.error(f'{requests.exceptions.ConnectTimeout}: {ex}')
             text = '{"data": []}'
-        return json.loads(text)
+        except requests.exceptions.ConnectionError as ex:
+            self.logger.error(f'{requests.exceptions.ConnectionError}: {ex}')
+            text = '{"data": []}'
+        try:
+            _json = json.loads(text)
+        except json.decoder.JSONDecodeError as ex:
+            self.logger.error(f'{json.decoder.JSONDecodeError}: {ex}')
+            return {}
+        return _json
 
     @staticmethod
     def _preprocessing_data(_df: pd.DataFrame) -> pd.DataFrame:
@@ -113,15 +119,25 @@ class DataWorker:
         return _df
 
     def _load_data(self, _df: pd.DataFrame) -> pd.DataFrame:
+        _json = ''
         if _df.empty:
             start_date = (datetime.now() - timedelta(days=MAX_INTERVAL_DAYS)).replace(hour=0, minute=0, second=0)
-            _df = pd.json_normalize(self._get_data(start_date)['data'])
+            _json_dict = self._get_data(start_date)
+            try:
+                _df = pd.json_normalize(_json_dict['data'])
+            except KeyError as ex:
+                self.logger.error(f'{KeyError}: {ex}')
+                return pd.DataFrame()
             _df = self._preprocessing_data(_df)
         else:
             last_date = _df['Дата'].max().replace(hour=0, minute=0, second=0)
-            loaded_df = self._preprocessing_data(
-                pd.json_normalize(self._get_data(last_date)['data'])
-            )
+            _json_dict = self._get_data(last_date)
+            try:
+                loaded_df = pd.json_normalize(_json_dict['data'])
+            except KeyError as ex:
+                self.logger.error(f'{KeyError}: {ex}')
+                return pd.DataFrame()
+            loaded_df = self._preprocessing_data(loaded_df)
             if not loaded_df.empty:
                 _df = pd.concat([_df[_df['Дата'] < last_date], loaded_df], axis=0, ignore_index=True)
 
@@ -138,15 +154,14 @@ class DataWorker:
         return _df
 
     def threaded_func(self):
+        sleep_time = 1
         while True:
             df_copy = self._df.copy()
-            try:
-                df_copy = self._load_data(df_copy)
-                with self.lock:
-                    self._df = df_copy.copy()
-            except Exception as ex:
-                self.logger.error(ex)
-            sleep(5)
+            df_copy = self._load_data(df_copy)
+            with self.lock:
+                self._df = df_copy.copy()
+            sleep(sleep_time)
+            sleep_time = 30
 
     def run(self):
         self.update_data_thread.start()
