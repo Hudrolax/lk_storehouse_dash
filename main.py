@@ -15,7 +15,7 @@ from threading import Lock
 
 WRITE_LOG_TO_FILE = False
 LOG_FORMAT = '%(name)s (%(levelname)s) %(asctime)s: %(message)s'
-LOG_LEVEL = logging.WARNING
+LOG_LEVEL = logging.INFO
 logger = logging.getLogger('main')
 
 if WRITE_LOG_TO_FILE:
@@ -200,4 +200,4 @@ def update_graph_live(n, value, n_clicks):
 
 if __name__ == '__main__':
     db.run()
-    app.run_server(debug=False, host='0.0.0.0')
+    app.run_server(debug=True, host='0.0.0.0')
