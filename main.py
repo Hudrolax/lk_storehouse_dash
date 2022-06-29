@@ -12,7 +12,17 @@ import base64
 from auth import enable_dash_auth
 from threading import Lock
 
+
+WRITE_LOG_TO_FILE = False
+LOG_FORMAT = '%(name)s (%(levelname)s) %(asctime)s: %(message)s'
+LOG_LEVEL = logging.INFO
 logger = logging.getLogger('main')
+
+if WRITE_LOG_TO_FILE:
+    logging.basicConfig(filename='dash.txt', filemode='w', format=LOG_FORMAT, level=LOG_LEVEL,
+                        datefmt='%d/%m/%y %H:%M:%S')
+else:
+    logging.basicConfig(format=LOG_FORMAT, level=LOG_LEVEL, datefmt='%d/%m/%y %H:%M:%S')
 
 
 def b64_image(image_filename):
@@ -190,4 +200,4 @@ def update_graph_live(n, value, n_clicks):
 
 if __name__ == '__main__':
     db.run()
-    app.run_server(debug=True, host='0.0.0.0')
+    app.run_server(debug=False, host='0.0.0.0')

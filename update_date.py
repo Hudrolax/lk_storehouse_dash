@@ -152,17 +152,16 @@ class DataWorker:
         _df['Нагрузка'] = 0
         _df['Объем в работе'] = 0
         _df = load_calc(_df)
+        self.logger.info('data updated')
         return _df
 
     def threaded_func(self):
-        sleep_time = 1
         while True:
             df_copy = self._df.copy()
             df_copy = self._load_data(df_copy)
             with self.lock:
                 self._df = df_copy.copy()
-            sleep(sleep_time)
-            sleep_time = 30
+            sleep(30)
 
     def run(self):
         self.update_data_thread.start()
