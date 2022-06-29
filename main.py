@@ -1,4 +1,5 @@
 import dash.exceptions
+import plotly.graph_objs
 from dash import Dash, dcc, html, ctx
 import dash_mantine_components as dmc
 from dash.dependencies import Input, Output, State
@@ -11,6 +12,7 @@ import logging
 import base64
 from auth import enable_dash_auth
 from threading import Lock
+from datetime import datetime
 
 
 WRITE_LOG_TO_FILE = False
@@ -39,9 +41,12 @@ lock = Lock()
 db = DataWorker(lock)
 
 
-def dates_calc(start_date, end_date):
-    if db.df.empty:
-        return px.scatter()
+def dates_calc(start_date: str, end_date: str) -> tuple[datetime, datetime]:
+    """
+    :param start_date: string
+    :param end_date: string
+    :return: touple of datetimes
+    """
     if start_date is not None:
         start_date = pd.to_datetime(start_date).replace(hour=0, minute=0, second=0, microsecond=0)
     else:
@@ -53,7 +58,15 @@ def dates_calc(start_date, end_date):
     return start_date, end_date
 
 
-def draw_main_graph(start_date, end_date):
+def draw_main_graph(start_date: str, end_date: str) -> plotly.graph_objs.Figure:
+    """
+    Создание фигуры основного графика с заданиями
+    :param start_date: string
+    :param end_date: string
+    :return: plotly figure
+    """
+    if db.df.empty:
+        return px.scatter()
     start_date, end_date = dates_calc(start_date, end_date)
     fig = px.scatter(db.df[(db.df['Дата'] >= start_date) & (db.df['Дата'] <= end_date)], x="Дата",
                      y="ВремяВыполнения_m",
@@ -85,7 +98,15 @@ def draw_main_graph(start_date, end_date):
     return fig
 
 
-def draw_load_graph(start_date, end_date):
+def draw_load_graph(start_date: str, end_date: str) -> plotly.graph_objs.Figure:
+    """
+    Создание фигуры графика нагрузки на склад
+    :param start_date: string
+    :param end_date: string
+    :return: plotly figure
+    """
+    if db.df.empty:
+        return px.scatter()
     start_date, end_date = dates_calc(start_date, end_date)
     df_p = db.df[(db.df['Дата'] >= start_date) & (db.df['Дата'] <= end_date)]
     trace1 = go.Scatter(x=df_p['Дата'], y=df_p['Нагрузка'], mode='lines+markers', yaxis='y1',
@@ -104,15 +125,27 @@ def draw_load_graph(start_date, end_date):
     return fig
 
 
-def draw_react_graph(start_date, end_date):
+def draw_react_graph(start_date: str, end_date: str) -> plotly.graph_objs.Figure:
+    """
+    Создание фигуры графика среднеего времени реакции ответственных
+    :param start_date: string
+    :param end_date: string
+    :return: plotly figure
+    """
+    if db.df.empty:
+        return px.scatter()
     start_date, end_date = dates_calc(start_date, end_date)
-    df_p = db.df[(db.df['Дата'] >= start_date) & (db.df['Дата'] <= end_date)]
+    df_p = db.df[(db.df['Дата'] >= start_date) & (db.df['Дата'] <= end_date)].copy()
+    df_p['Количество заданий'] = 1
+    df_count = df_p[['БригадаОтветственный', 'Количество заданий']].groupby(by='БригадаОтветственный').sum()
     df_p = df_p[['БригадаОтветственный', 'ВремяРеакции']][df_p['БригадаОтветственный'] != '']\
         .groupby(by='БригадаОтветственный', as_index=False).mean()
     df_p['ВремяРеакции'] = (df_p['ВремяРеакции'] / 60).astype(int)
+    df_p = pd.merge(df_p, df_count, how='left', on='БригадаОтветственный')
 
     fig = px.bar(df_p, x='ВремяРеакции', y='БригадаОтветственный', color='БригадаОтветственный',
                  title='Время реакции',
+                 hover_data=['Количество заданий'],
                  labels={
                      "ВремяРеакции": "Среднее время реакции, мин.",
                      "БригадаОтветственный": ""
@@ -123,12 +156,16 @@ def draw_react_graph(start_date, end_date):
 
 # ********************** the page **********************
 app.layout = dbc.Container([
+    # Header
     dbc.Row(
         dbc.Col(
             html.H3('Мониторинг склада',
                     className='text-center')
         )
-    ), dbc.Row([
+    ),
+
+    # data picker Row
+    dbc.Row([
         dbc.Col([
             dmc.DateRangePicker(
                 id="date-range-picker",
@@ -143,12 +180,17 @@ app.layout = dbc.Container([
             width={'size': 2, 'offset': 0}, align="end"
         )
     ], justify='start', className='g-0'),
+
+    # Main graph Row
     dbc.Row(
         dbc.Col([
             dcc.Graph(id='main-graph'),
         ])
     ),
+
+    # bottom graphs Row
     dbc.Row([
+
         dbc.Col(
             dcc.Graph(id='graph_load'), width={'size': 6}
         ),
