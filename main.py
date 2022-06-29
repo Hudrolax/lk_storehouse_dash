@@ -15,7 +15,7 @@ from threading import Lock
 
 WRITE_LOG_TO_FILE = False
 LOG_FORMAT = '%(name)s (%(levelname)s) %(asctime)s: %(message)s'
-LOG_LEVEL = logging.INFO
+LOG_LEVEL = logging.WARNING
 logger = logging.getLogger('main')
 
 if WRITE_LOG_TO_FILE:
