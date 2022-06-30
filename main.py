@@ -41,7 +41,7 @@ lock = Lock()
 db = DataWorker(lock)
 
 
-def dates_calc(start_date: str, end_date: str) -> tuple[datetime, datetime]:
+def dates_calc(start_date: str | None, end_date: str | None) -> tuple[datetime, datetime]:
     """
     :param start_date: string
     :param end_date: string
@@ -58,7 +58,7 @@ def dates_calc(start_date: str, end_date: str) -> tuple[datetime, datetime]:
     return start_date, end_date
 
 
-def draw_main_graph(start_date: str, end_date: str) -> plotly.graph_objs.Figure:
+def draw_main_graph(start_date: str | None, end_date: str | None) -> plotly.graph_objs.Figure:
     """
     Создание фигуры основного графика с заданиями
     :param start_date: string
@@ -98,7 +98,7 @@ def draw_main_graph(start_date: str, end_date: str) -> plotly.graph_objs.Figure:
     return fig
 
 
-def draw_load_graph(start_date: str, end_date: str) -> plotly.graph_objs.Figure:
+def draw_load_graph(start_date: str | None, end_date: str | None) -> plotly.graph_objs.Figure:
     """
     Создание фигуры графика нагрузки на склад
     :param start_date: string
@@ -125,7 +125,7 @@ def draw_load_graph(start_date: str, end_date: str) -> plotly.graph_objs.Figure:
     return fig
 
 
-def draw_react_graph(start_date: str, end_date: str) -> plotly.graph_objs.Figure:
+def draw_react_graph(start_date: str | None, end_date: str | None) -> plotly.graph_objs.Figure:
     """
     Создание фигуры графика среднеего времени реакции ответственных
     :param start_date: string
@@ -171,12 +171,13 @@ app.layout = dbc.Container([
                 id="date-range-picker",
                 label="Период",
                 hideOutsideDates=True,
-                style={"width": 330},
+                # style={"width": 250},
                 locale="ru",
+                # class_name="min-w-100"
             )
         ], width={'size': 3, 'offset': 1}),
         dbc.Col(
-            html.Button('Текущий день', id='btn_today', n_clicks=0, className='btn btn-outline-primary'),
+            html.Button('Текущий день', id='btn_today', n_clicks=0, className='btn btn-outline-primary mx-2'),
             width={'size': 2, 'offset': 0}, align="end"
         )
     ], justify='start', className='g-0'),
@@ -229,15 +230,16 @@ def update_graph_live(n, value, n_clicks):
     else:
         if value is None:
             value = (None, None)
-        animate = True
+        animate = False # временно, т.к. непонятные ошибки в js
         if ctx.triggered_id in ['date-range-picker', 'btn_today']:
             animate = False
         with lock:
             if ctx.triggered_id == 'btn_today':
                 return draw_main_graph(None, None), animate, "", "", (None, None), draw_load_graph(None, None), \
                        animate, draw_react_graph(None, None)
-            return draw_main_graph(*value), animate, db.df['Дата'].min(), db.df['Дата'].max(), dash.no_update, \
-                   draw_load_graph(*value), animate, draw_react_graph(*value)
+            else:
+                return draw_main_graph(*value), animate, db.df['Дата'].min(), db.df['Дата'].max(), dash.no_update, \
+                       draw_load_graph(*value), animate, draw_react_graph(*value)
 
 
 if __name__ == '__main__':
