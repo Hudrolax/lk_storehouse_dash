@@ -13,7 +13,7 @@ import base64
 from auth import enable_dash_auth
 from threading import Lock
 from datetime import datetime
-
+import flask
 
 WRITE_LOG_TO_FILE = False
 LOG_FORMAT = '%(name)s (%(levelname)s) %(asctime)s: %(message)s'
@@ -33,10 +33,12 @@ def b64_image(image_filename):
     return 'data:image/png;base64,' + base64.b64encode(image).decode('utf-8')
 
 
+server = flask.Flask(__name__) # define flask app.server
 app = Dash(__name__, title='Склад ЛК', external_stylesheets=[dbc.themes.MINTY],
            meta_tags=[{"name": "viewport",
                        'content': 'width=device-width, initial-scale=1.0'}],
-           url_base_pathname='/lk_storehouse_dash/')
+           url_base_pathname='/lk_storehouse_dash/',
+           server=server)
 enable_dash_auth(app)
 lock = Lock()
 db = DataWorker(lock)
