@@ -37,10 +37,10 @@ app = Dash(__name__, title='Склад ЛК', external_stylesheets=[dbc.themes.M
            meta_tags=[{"name": "viewport",
                        'content': 'width=device-width, initial-scale=1.0'}],
            url_base_pathname='/lk_storehouse_dash/')
-server = app.server
 enable_dash_auth(app)
 lock = Lock()
 db = DataWorker(lock)
+db.run()
 
 
 def dates_calc(start_date: str | None, end_date: str | None) -> tuple[datetime, datetime]:
@@ -245,5 +245,4 @@ def update_graph_live(n, value, n_clicks):
 
 
 if __name__ == '__main__':
-    db.run()
     app.run_server(debug=False, host='0.0.0.0')
