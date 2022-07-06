@@ -13,7 +13,7 @@ COPY . .
 RUN python3 -m pip install --upgrade pip
 RUN pip3 install -r requirements.txt
 
-RUN sudo chmod +x /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 # run entrypoint.sh
 ENTRYPOINT ["/app/entrypoint.sh"]
