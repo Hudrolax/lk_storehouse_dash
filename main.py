@@ -35,7 +35,8 @@ def b64_image(image_filename):
 
 app = Dash(__name__, title='Склад ЛК', external_stylesheets=[dbc.themes.MINTY],
            meta_tags=[{"name": "viewport",
-                       'content': 'width=device-width, initial-scale=1.0'}])
+                       'content': 'width=device-width, initial-scale=1.0'}],
+           url_base_pathname='/lk_storehouse_dash/')
 enable_dash_auth(app)
 lock = Lock()
 db = DataWorker(lock)
